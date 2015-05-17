@@ -95,7 +95,7 @@
   (- max-padding (mod (count msg) max-padding)))
 
 ;; FIXME: ONLY works for msgs < 56 bytes, as a first pass (jw 15-05-12)
-
+;; TODO: Just use a ByteBuffer? (jw 15-05-16)
 (defn make-spec [msg]
   (let [ msg-spec (bin/spec :msg (bin/string-type (count msg))
                             :padding (bin/bit-type 1)
@@ -106,17 +106,6 @@
     (bin/set-field buf :padding [false false false false false false false true])
     (bin/set-field buf :msg-size (len-bits msg))
     buf))
-
-;; split into 512 bit chunks
-(defn make-chunks [b]
-  (->> b
-       bin/buffer
-       (.array)
-       (apply vector)
-       (partition 4)
-       (map bytes->int)
-       (into []))
-)
 
 ;; split into 16 32-bit words (big endian)
 (defn make-words [b]
@@ -149,61 +138,39 @@
        (drop-while #(> 80 (count %)))
        first))
 
-(defn subproc [i a b c d e f wd k]
-  (let
-      ;; temp = (a leftrotate 5) + f + e + k + w[i]
-      [temp (.intValue (apply + [(rotate-left a 5) f e k wd]))
-       r {:e d ;; e = d
-          :d c ;; d = c
-          :c (rotate-left b 30) ;; c = b leftrotate 30
-          :b a ;; b = a
-          :a temp ;; a = temp
-          }]
-    (spit "mine.txt" (format "i: %d, w: %d, a: %d, b: %d, c: %d, d: %d, e: %d, f: %d, K: %d\n" i, wd, (:a r) (:b r) (:c r) (:d r) (:e r) f k) :append true)
-    r
-    ))
+(defn subproc [a b c d e f wd k]
+  {:a (.intValue (apply + [(rotate-left a 5) f e k wd]))
+   :b a
+   :c (rotate-left b 30)
+   :d c
+   :e d})
 
-;; need to group a-b-c-d-e
+;; (spit "mine.txt" (format "i: %d, w: %d, a: %d, b: %d, c: %d, d: %d, e: %d, f: %d, K: %d\n" i, wd, (:a r) (:b r) (:c r) (:d r) (:e r) f k) :append true)
+
+;; TODO: Use record for grouping a-b-c-d-e? (jw 15-05-17)
 (defn main-loop [chunk]
-  (spit "mine.txt" "")
-  (loop [a h0, b h1, c h2, d h3, e h4, idx-wd (first chunk) remaining (rest chunk)]
-    ;; (pprint [a, b, c, d, e, idx-wd])
+  (loop [a h0, b h1, c h2, d h3, e h4, idx-wd (first chunk), remaining (rest chunk)]
+
     (let [[i wd] idx-wd
           nxt (cond
-                ;; if 0 ≤ i ≤ 19 then
                 (<= 0 i 19)
-                  (let
-                      ;; f = (b and c) or ((not b) and d)
-                      [f (bit-or (bit-and b c) (bit-and (bit-not b) d))]
-                    ;; k = 0x5A827999 ;; k1
-                    (subproc i a b c d e f wd k1))
+                  (let [f (bit-or (bit-and b c) (bit-and (bit-not b) d))]
+                    (subproc a b c d e f wd k1))
 
-                ;; else if 20 ≤ i ≤ 39
                 (<= 20 i 39)
-                  (let
-                      ;; f = b xor c xor d
-                      [f (-> b (bit-xor c) (bit-xor d))]
-                    ;; k = 0x6ED9EBA1 ;; k2
-                    (subproc i a b c d e f wd k2))
+                  (let [f (-> b (bit-xor c) (bit-xor d))]
+                    (subproc a b c d e f wd k2))
 
-                ;; else if 40 ≤ i ≤ 59
                 (<= 40 i 59)
-                  (let
-                      ;; f = (b and c) or (b and d) or (c and d)
-                      [f  (bit-or
+                  (let [f (bit-or
                            (bit-or (bit-and b c)
                                    (bit-and b d))
                            (bit-and c d))]
-                    ;; k = 0x8F1BBCDC ;; k3
-                    (subproc i a b c d e f wd k3))
+                    (subproc a b c d e f wd k3))
 
-                ;; else if 60 ≤ i ≤ 79
                 (<= 60 i 79)
-                  (let
-                      ;; f = b xor c xor d
-                      [f  (-> b (bit-xor c) (bit-xor d))]
-                    ;; k = 0xCA62C1D6 ;; k4
-                    (subproc i a b c d e f wd k4))
+                  (let [f  (-> b (bit-xor c) (bit-xor d))]
+                    (subproc a b c d e f wd k4))
                 )]
       (if (not (seq remaining))
         nxt
@@ -211,15 +178,8 @@
         )
       )))
 
-;; Add this chunk's hash to result so far:
-;; h0 = h0 + a
-;; h1 = h1 + b
-;; h2 = h2 + c
-;; h3 = h3 + d
-;; h4 = h4 + e
-
 (defn proc-main [res]
-
+  ;; Add this chunk's hash to result so far:
   {:h0 (+ h0 (:a res))
    :h1 (+ h1 (:b res))
    :h2 (+ h2 (:c res))
@@ -232,14 +192,11 @@
 (defn final
   "Produce the final hash value (big-endian) as a 160 bit number"
   [[h0 h1 h2 h3 h4]]
-  ;;hh = (h0 leftshift 128) or (h1 leftshift 96) or (h2 leftshift 64) or (h3 leftshift 32) or h4
-  ;; NOTE: Here we do need to mask off the longs before we process them.
-  (-> (.shiftLeft (->big (long->int h0)) 128)         ;(h0 leftshift 128)
-      (.or (.shiftLeft (->big (long->int h1)) 96)) ;or (h1 leftshift 96)
-      (.or (.shiftLeft (->big (long->int h2)) 64)) ;or (h2 leftshift 64)
-      (.or (.shiftLeft (->big (long->int h3)) 32)) ;or (h3 leftshift 32)
-      (.or (->big (long->int h4)))                  ;or h4
-      ))
+  (-> (.shiftLeft h0 128)
+      (.or (.shiftLeft h1 96))
+      (.or (.shiftLeft h2 64))
+      (.or (.shiftLeft h3 32))
+      (.or             h4)))
 
 (defn sha1 [msg]
   (->> (make-spec msg)
@@ -249,6 +206,7 @@
        (main-loop)
        (proc-main)
        res->vec
+       (map #(->big (long->int %)))
        (final)
        (.toByteArray)
        (apply vector)
