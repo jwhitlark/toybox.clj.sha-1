@@ -41,6 +41,35 @@
   "Convert bytes to a String"
   (apply str (map #(format "%02x" %) bytes)))
 
+(defn len-bits
+  "Return the string length in bits, as a Long."
+  [s] (* Byte/SIZE (count s)))
+
+(defn view-bits [i]
+  (Long/toBinaryString i))
+
+;; TODO: Rename. mask-int, mask-32-bits, mask-32, lower-32 ? (jw 15-05-17)
+(defn long->int [l]
+  (bit-and l 0xffffffff))
+
+(defn ->big [l]
+  (-> l (.toString) (BigInteger.)))
+
+(defn unsign [b]
+  (Byte/toUnsignedInt b))
+
+(defn rotate-left
+  ([x] (rotate-left x 1))
+  ([x n]
+   (.intValue (bit-or (bit-shift-left x n )
+                      (unsigned-bit-shift-right (long->int x)
+                                                (- Integer/SIZE n))))))
+
+(defn index-items [items]
+  (map-indexed (fn [idx x] [idx x]) items))
+
+;; Real implementation.
+
 (def h0 0x67452301)
 (def h1 0xEFCDAB89)
 (def h2 0x98BADCFE)
@@ -52,18 +81,9 @@
 (def k3 0x8F1BBCDC)
 (def k4 0xCA62C1D6)
 
-
-(def chunk-size (/ 512 8))
-(def long-size (/ Long/SIZE 8)) ;; 64 bits
-(def max-padding (- chunk-size long-size))
-
-(defn ml-bytes [msg]
-  (* Character/BYTES (count msg)))
-
-(defn ml-bits
-  "Return the msg length in bits, as a Long."
-  [msg]
-  (* Byte/SIZE (count msg))) ;; removed Character/BYTES, don't understand why this isn't needed.
+(def chunk-size 512)
+(def max-padding (-> (- chunk-size Long/SIZE)
+                     (/ 8)))
 
 (defn pad-length [msg]
   (- max-padding (mod (count msg) max-padding)))
@@ -78,23 +98,14 @@
         buf (bin/compose-buffer msg-spec :buffer-type :heap)]
     (bin/set-field buf :msg msg)
     (bin/set-field buf :padding [false false false false false false false true])
-    (bin/set-field buf :msg-size (ml-bits msg))
+    (bin/set-field buf :msg-size (len-bits msg))
     buf))
 
-(defn long->int [l]
-  (bit-and l 0xffffffff))
-
-(defn us [b]
-  (Byte/toUnsignedInt b))
-
-(defn view-bits [i]
-  (Long/toBinaryString i))
-
 (defn compose-word [ck]
-  (-> (us (first ck))
-      (bit-shift-left 8) (bit-or (us (nth ck 1)))
-      (bit-shift-left 8) (bit-or (us (nth ck 2)))
-      (bit-shift-left 8) (bit-or (us (nth ck 3)))))
+  (-> (unsign (first ck))
+      (bit-shift-left 8) (bit-or (unsign (nth ck 1)))
+      (bit-shift-left 8) (bit-or (unsign (nth ck 2)))
+      (bit-shift-left 8) (bit-or (unsign (nth ck 3)))))
 
 ;; split into 512 bit chunks
 (defn make-chunks [b]
@@ -116,14 +127,6 @@
     (partition 4)
     (map compose-word)
     (into [])))
-
-(defn rotate-left
-  ([x] (rotate-left x 1))
-  ([x n]
-   (.intValue (bit-or (bit-shift-left x n )
-                      (unsigned-bit-shift-right (long->int x) (- Integer/SIZE n))))))
-
-
 
 (defn next-word [wds]
   (let [rc (reverse wds)
@@ -149,11 +152,6 @@
        (iterate next-word)
        (drop-while #(> 80 (count %)))
        first))
-
-(defn index-words [wds]
-  (->> wds
-      (interleave (range 80))
-      (partition 2)))
 
 (defn subproc [i a b c d e f wd k]
   (let
@@ -232,9 +230,6 @@
    :h3 (+ h3 (:d res))
    :h4 (+ h4 (:e res))})
 
-(defn to-big [l]
-  (-> l (.toString) (BigInteger.)))
-
 (defn res->vec [res]
   [(:h0 res) (:h1 res) (:h2 res) (:h3 res) (:h4 res)])
 
@@ -243,18 +238,18 @@
   [[h0 h1 h2 h3 h4]]
   ;;hh = (h0 leftshift 128) or (h1 leftshift 96) or (h2 leftshift 64) or (h3 leftshift 32) or h4
   ;; NOTE: Here we do need to mask off the longs before we process them.
-  (-> (.shiftLeft (to-big (long->int h0)) 128)         ;(h0 leftshift 128)
-      (.or (.shiftLeft (to-big (long->int h1)) 96)) ;or (h1 leftshift 96)
-      (.or (.shiftLeft (to-big (long->int h2)) 64)) ;or (h2 leftshift 64)
-      (.or (.shiftLeft (to-big (long->int h3)) 32)) ;or (h3 leftshift 32)
-      (.or (to-big (long->int h4)))                  ;or h4
+  (-> (.shiftLeft (->big (long->int h0)) 128)         ;(h0 leftshift 128)
+      (.or (.shiftLeft (->big (long->int h1)) 96)) ;or (h1 leftshift 96)
+      (.or (.shiftLeft (->big (long->int h2)) 64)) ;or (h2 leftshift 64)
+      (.or (.shiftLeft (->big (long->int h3)) 32)) ;or (h3 leftshift 32)
+      (.or (->big (long->int h4)))                  ;or h4
       ))
 
 (defn sha1 [msg]
   (->> (make-spec msg)
        (make-words)
        (extend-words)
-       (index-words)
+       (index-items)
        (main-loop)
        (proc-main)
        res->vec
