@@ -36,11 +36,6 @@
     (is (= 5 (long->int 5)))
     (is (= 0xffffffff (long->int 0xffffffff)))
     (is (= 0xffffffff (long->int 0xfffffffff))))
-  (testing "Check max int bit"
-    (is (= false (max-int-bit 0)))
-    (is (= true  (max-int-bit 0xffffffff)))
-    (is (= true  (max-int-bit 0x80000000)))
-    (is (= false (max-int-bit 0x800000000))))
   (testing "Rotate left"
     (is (= 0 (rotate-left 0)))
     (is (= 2 (rotate-left 1)))

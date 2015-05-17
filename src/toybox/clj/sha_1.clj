@@ -117,22 +117,13 @@
     (map compose-word)
     (into [])))
 
-(defn max-int-bit
-  "Returns true or false if max allowable int bit is set."
-  [x]
-  (bit-test x 31))
-
-;; TODO: Write better implementation (jw 15-05-15)
 (defn rotate-left
-  ([x]
-   (rotate-left x 1))
+  ([x] (rotate-left x 1))
   ([x n]
-   (let [carry-bit (max-int-bit x)
-         part (-> x (bit-shift-left 1) )
-         new-v (if carry-bit (bit-set part 0) part)]
-     (if (<= n 1)
-       (.intValue new-v)
-       (recur new-v (dec n))))))
+   (.intValue (bit-or (bit-shift-left x n )
+                      (unsigned-bit-shift-right (long->int x) (- Integer/SIZE n))))))
+
+
 
 (defn next-word [wds]
   (let [rc (reverse wds)
