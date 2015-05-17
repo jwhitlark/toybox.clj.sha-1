@@ -58,6 +58,12 @@
 (defn unsign [b]
   (Byte/toUnsignedInt b))
 
+(defn bytes->int [bts] ;; TODO: Write as a reducer? (jw 15-05-17)
+  (-> (unsign (first bts))
+      (bit-shift-left 8) (bit-or (unsign (nth bts 1)))
+      (bit-shift-left 8) (bit-or (unsign (nth bts 2)))
+      (bit-shift-left 8) (bit-or (unsign (nth bts 3)))))
+
 (defn rotate-left
   ([x] (rotate-left x 1))
   ([x n]
@@ -101,12 +107,6 @@
     (bin/set-field buf :msg-size (len-bits msg))
     buf))
 
-(defn compose-word [ck]
-  (-> (unsign (first ck))
-      (bit-shift-left 8) (bit-or (unsign (nth ck 1)))
-      (bit-shift-left 8) (bit-or (unsign (nth ck 2)))
-      (bit-shift-left 8) (bit-or (unsign (nth ck 3)))))
-
 ;; split into 512 bit chunks
 (defn make-chunks [b]
   (->> b
@@ -114,7 +114,7 @@
        (.array)
        (apply vector)
        (partition 4)
-       (map compose-word)
+       (map bytes->int)
        (into []))
 )
 
@@ -125,19 +125,15 @@
     (.array)
     (apply vector)
     (partition 4)
-    (map compose-word)
+    (map bytes->int)
     (into [])))
 
 (defn next-word [wds]
-  (let [rc (reverse wds)
-        i3 (nth rc 2)
-        i8 (nth rc 7)
-        i14 (nth rc 13)
-        i16 (nth rc 15)]
-    (-> i3
-        (bit-xor i8)
-        (bit-xor i14)
-        (bit-xor i16)
+  (let [rev-wds (reverse wds)]
+    (-> (nth rev-wds 2)
+        (bit-xor (nth rev-wds 7))
+        (bit-xor (nth rev-wds 13))
+        (bit-xor (nth rev-wds 15))
         rotate-left
         (->> (conj wds)))))
 
