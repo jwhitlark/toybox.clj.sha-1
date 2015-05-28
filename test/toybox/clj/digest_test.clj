@@ -1,11 +1,12 @@
-(ns toybox.clj.sha-1-test
+(ns toybox.clj.digest-test
   (:require [clojure.test :refer :all]
             [com.gfredericks.test.chuck.clojure-test :refer [checking]]
             [clojure.test.check :as tc]
             [clojurewerkz.buffy.core :as bin]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
-            [toybox.clj.sha-1 :refer :all])
+            [toybox.clj.digest :refer :all]
+            [toybox.clj.util.b-tools :refer :all])
   (:import [java.security MessageDigest]
            [Digest]))
 
@@ -21,10 +22,6 @@
     (is (= 64 (.maxCapacity (bin/buffer (make-spec "")))))
     (is (= 64 (.maxCapacity (bin/buffer (make-spec "foo")))))
     (is (= 64 (.maxCapacity (bin/buffer (make-spec "berfin"))))))
-  (testing "First split works"
-    (is (= 16 (count (make-words (make-spec "")))))
-    (is (= 16 (count (make-words (make-spec "foo")))))
-    (is (= 16 (count (make-words (make-spec "berfin"))))))
   (testing "View bits"
     (is (= "1" (view-bits 1)))
     (is (= "101" (view-bits 5)))
@@ -43,13 +40,7 @@
     (is (= 0 (rotate-left 0 4)))
     (is (= 16 (rotate-left 1 4)))
     (is (= 8 (rotate-left 0x80000000 4))))
-  (testing "Testing extend words"
-    (is (= 80 (count (extend-words (make-words (make-spec ""))))))
-    (is (= 80 (count (extend-words (make-words (make-spec "foo"))))))
-    (is (= 80 (count (extend-words (make-words (make-spec "berfin")))))))
   (testing "Compare sections to Java impl."
-    ;; so, pad works, rotate works, extend-words, index-words, and final works.
-    ;; extend-words and index-words were manually compared
     (is (= (->> (byte-array 0) (.padTheMessage (Digest.)) (apply vector))
            (->> (make-spec "") (bin/buffer) (.array) (apply vector))))
     (is (= (->> (.getBytes "b") (.padTheMessage (Digest.)) (apply vector))
@@ -58,32 +49,19 @@
     (is (= (.rotateLeft (Digest.) 10 2)
            (rotate-left 10 2)))
     (is (= (.rotateLeft (Digest.) (.intValue 0x80000000) 4)
-           (rotate-left (.intValue 0x80000000) 4)))
-    ;; (is (= (known-correct-sha1 "") ;; following line is what runs the printout.
-    ;;        (rest (apply vector (.toByteArray (final (apply vector (.digestIt (Digest.) (byte-array 0)))))))))
-
-    )
+           (rotate-left (.intValue 0x80000000) 4))))
 
   (testing "End to end"
     (is (= (known-correct-sha1 "") (sha1 "")))
     (is (= (known-correct-sha1 "b") (sha1 "b")))
-    (is (= (known-correct-sha1 "berfin") (sha1 "berfin")))
+    (is (= (known-correct-sha1 "Berfin") (sha1 "Berfin"))) ;-*
     (is (= (known-correct-sha1 "The quick brown fox jumps over the lazy dog") (sha1 "The quick brown fox jumps over the lazy dog")))
-#_     (is (= (known-correct-sha1 "The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog.")
+    (is (= (known-correct-sha1 "The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog.")
            (sha1 "The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog.")))
-    )
+    ))
 
-
-  )
-
-;; after last transform.
-;; H0:-633756690
-;; H1:1584089869
-;; H2:844480495
-;; H3:-1788864368
-;; H4:-1344796919
-
-#_ (deftest unsearched-failure
-     (checking "incorrect" 100 [i gen/pos-int]
-               (is (< i 50))
-               (is (= i i))))
+;; Takes a few seconds.
+(deftest check-generated-strings
+  (checking "incorrect" 10000 [s gen/string-alphanumeric]
+            (is (= (known-correct-sha1 s) (sha1 s)))
+            ))
