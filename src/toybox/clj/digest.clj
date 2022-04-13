@@ -135,3 +135,14 @@
        (concat (repeat 20 0)) ;; lame hack,
        (apply vector)
        (take-last 20)))
+
+(defn print-sha1
+  "Print a sha1 to stdout (for cmd line use)
+   
+   (The following needs special quoting)
+   usage: clj -X 'toybox.clj.digest/print-sha1' :str '\"foo\n\"'"
+  [x]
+  (->> (sha1 (:str x))
+       (map (partial format "%02x"))
+       (apply str)
+       (println)))

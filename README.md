@@ -8,13 +8,17 @@ You've been warned ;-)
 
 ## Usage
 
-lein test
+### Running
+
+    clj -X 'toybox.clj.digest/print-sha1' :str '"foo\n"'
+
+### Testing
+
+    clj -X:test
 
 ## License
 
-Copyright © 2015 Jason Whitlark
+Copyright © 2022 Jason Whitlark
 
 Distributed under the Eclipse Public License either version 1.0 or (at
 your option) any later version.
-
-Note that I lifted the Java code from 2005 Java Ranch posting.
