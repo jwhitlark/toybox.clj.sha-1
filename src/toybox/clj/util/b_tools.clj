@@ -1,8 +1,9 @@
 (ns toybox.clj.util.b-tools)
 
 
-(defn toHexString [bytes]
-  "Convert bytes to a String"
+(defn toHexString 
+  "Convert bytes to a String" 
+  [bytes]
   (apply str (map #(format "%02x" %) bytes)))
 
 (defn len-bits

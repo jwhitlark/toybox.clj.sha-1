@@ -1,16 +1,7 @@
 (ns toybox.clj.digest
-  (:require [clojure.pprint :as pp :refer [pprint]]
-            [clojure.string :as str]
-            [clojure.reflect :as r]
-            [clojurewerkz.buffy.core :as buffy]
-            [toybox.clj.util.b-tools :refer :all]
-            [clojurewerkz.buffy.util :refer [hex-dump] :as util])
-  (:import [java.security MessageDigest]
-
-
-           [java.nio ByteBuffer]
-           [java.util BitSet]
-           ))
+  (:require [clojurewerkz.buffy.core :as buffy]
+            [toybox.clj.util.b-tools :refer [->big bytes->int index-items len-bits long->int rotate-left]])
+  (:import [java.security MessageDigest]))
 
 (defn known-correct-sha1 [s]
   (apply vector (.digest (MessageDigest/getInstance "SHA1") (.getBytes s))))

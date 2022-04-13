@@ -1,13 +1,8 @@
 (ns toybox.clj.digest-test
-  (:require [clojure.test :refer :all]
-            [com.gfredericks.test.chuck.clojure-test :refer [checking]]
-            [clojure.test.check :as tc]
+  (:require [clojure.test :refer [deftest is testing]]
             [clojurewerkz.buffy.core :as bin]
-            [clojure.test.check.generators :as gen]
-            [clojure.test.check.properties :as prop]
-            [toybox.clj.digest :refer :all]
-            [toybox.clj.util.b-tools :refer :all])
-  (:import [java.security MessageDigest]))
+            [toybox.clj.digest :refer [known-correct-sha1 make-spec sha1]]
+            [toybox.clj.util.b-tools :refer [long->int rotate-left view-bits toHexString]]))
 
 (deftest check-known-correct-sha-1
   (testing "Known correct, from Wikipedia spec."
@@ -48,9 +43,3 @@
     (is (= (known-correct-sha1 "The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog.")
            (sha1 "The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog.")))
     ))
-
-;; Takes a few seconds.
-(deftest check-generated-strings
-  (checking "incorrect" 10000 [s gen/string-alphanumeric]
-            (is (= (known-correct-sha1 s) (sha1 s)))
-            ))
