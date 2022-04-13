@@ -7,8 +7,7 @@
             [clojure.test.check.properties :as prop]
             [toybox.clj.digest :refer :all]
             [toybox.clj.util.b-tools :refer :all])
-  (:import [java.security MessageDigest]
-           [Digest]))
+  (:import [java.security MessageDigest]))
 
 (deftest check-known-correct-sha-1
   (testing "Known correct, from Wikipedia spec."
@@ -40,16 +39,6 @@
     (is (= 0 (rotate-left 0 4)))
     (is (= 16 (rotate-left 1 4)))
     (is (= 8 (rotate-left 0x80000000 4))))
-  (testing "Compare sections to Java impl."
-    (is (= (->> (byte-array 0) (.padTheMessage (Digest.)) (apply vector))
-           (->> (make-spec "") (bin/buffer) (.array) (apply vector))))
-    (is (= (->> (.getBytes "b") (.padTheMessage (Digest.)) (apply vector))
-           (->> (make-spec "b") (bin/buffer) (.array) (apply vector))))
-
-    (is (= (.rotateLeft (Digest.) 10 2)
-           (rotate-left 10 2)))
-    (is (= (.rotateLeft (Digest.) (.intValue 0x80000000) 4)
-           (rotate-left (.intValue 0x80000000) 4))))
 
   (testing "End to end"
     (is (= (known-correct-sha1 "") (sha1 "")))
